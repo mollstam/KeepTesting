@@ -39,7 +39,7 @@ Installation
 ------------
 Place KeepTesting.py in your `Packages/User` folder (where Sublime store stuff)
 
-You might want to ignore `.keepTestingLock` in your project if you're annoyed buy the slidy slidy on saving.
+You might want to ignore `.keepTestingLock` in your project if you're annoyed by the slidy slidy on saving.
 
 Usage
 -----
