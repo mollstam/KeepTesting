@@ -34,6 +34,7 @@ class KeepTestingCommand(sublime_plugin.EventListener):
 
         if (len(self.test_results.keys()) != 0):
             progressbar = "["
+            error_message = ""
             keys = self.test_results.keys()
             test_count = 0
             test_ok = 0
@@ -47,12 +48,15 @@ class KeepTestingCommand(sublime_plugin.EventListener):
                 elif (result == 'FAILED'):
                     test_fail += 1
                     progressbar += 'X'
+                    error_message = k
                 elif (result == 'STARTED'):
                     progressbar += 'o'
                 else:
                     print "Unknown result for " + k + ": " + result
                     progressbar += '?'
             progressbar += "] " + str(test_ok)  + "/" + str(test_count) + " passed"
+            if test_fail > 0:
+                progressbar += " - FAIL " + error_message
             sublime.status_message(progressbar)
 
         if self.is_running() or test_fail > 0:
@@ -95,7 +99,7 @@ class KeepTestingCommand(sublime_plugin.EventListener):
             out += line
             m = KeepTestingCommand.test_status_pattern.match(line)
             if m:
-                result[m.group(1) + "|" + m.group(2)] = m.group(3)
+                result[m.group(1) + " : " + m.group(2)] = m.group(3)
             if (retcode is not None):
                 break
         self.stopped_tests()
