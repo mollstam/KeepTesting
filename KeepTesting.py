@@ -6,6 +6,7 @@ class KeepTestingCommand(sublime_plugin.EventListener):
     test_status_pattern = re.compile('.*\[TestEventLogger\] ([A-Za-z0-9\._]+) > ([A-Za-z0-9_]+) ([A-Z]+).*')
     error_message_start_pattern = re.compile('.*\[TestEventLogger\]\s+java\.lang\.AssertionError:.*')
     error_message_trace_pattern = re.compile('.*\[TestEventLogger\]\s+at\s+.*')
+    line_number_pattern = re.compile('.*(:[0-9]+)\)')
 
     test_runs = []
     running_tests = []
@@ -46,6 +47,7 @@ class KeepTestingCommand(sublime_plugin.EventListener):
                 test_count += 1
                 result = self.test_results[k][0]
                 error = self.test_results[k][1]
+                line_number = self.test_results[k][2]
                 if (result == 'PASSED'):
                     test_ok += 1
                     progressbar += '-'
@@ -54,7 +56,7 @@ class KeepTestingCommand(sublime_plugin.EventListener):
                     progressbar += 'X'
                     error_message = k.split("|")[1]
                     if (len(error) > 0):
-                        error_message += " - " + error
+                        error_message += line_number + " - " + error
                 elif (result == 'STARTED'):
                     progressbar += 'o'
                 else:
@@ -105,22 +107,28 @@ class KeepTestingCommand(sublime_plugin.EventListener):
         error_message = ""
         current_key = None
         last_key = None
+        current_test_class = None
         while(True):
             retcode = p.poll()
             line = p.stdout.readline()
             out += line
             m = KeepTestingCommand.test_status_pattern.match(line)
             if m:
+                current_test_class = m.group(1)
                 current_key = m.group(1) + "|" + m.group(2)
-                result[current_key] = [m.group(3),'']
+                result[current_key] = [m.group(3),'','']
                 error_message = ''
 
             if (KeepTestingCommand.error_message_start_pattern.match(line)):
                 capturing_error_message = True
             elif (KeepTestingCommand.error_message_trace_pattern.match(line)):
                 capturing_error_message = False
-                result[current_key] = [result[current_key][0], error_message]
+                result[current_key] = [result[current_key][0], error_message, result[current_key][2]]
                 # this is where we look for line number in stack trace
+                if current_test_class in line:
+                    m = KeepTestingCommand.line_number_pattern.match(line)
+                    if m:
+                        result[current_key] = [result[current_key][0], result[current_key][1], m.group(1)]
             elif capturing_error_message:
                 m = KeepTestingCommand.test_output_pattern.match(line)
                 if m:
