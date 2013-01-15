@@ -2,7 +2,10 @@ import sys, sublime, sublime_plugin, time, datetime, os, threading, subprocess, 
 exe = __import__('exec')
 
 class KeepTestingCommand(sublime_plugin.EventListener):
+    test_output_pattern = re.compile('.*\[TestEventLogger\]\s+(.*)')
     test_status_pattern = re.compile('.*\[TestEventLogger\] ([A-Za-z0-9\._]+) > ([A-Za-z0-9_]+) ([A-Z]+).*')
+    error_message_start_pattern = re.compile('.*\[TestEventLogger\]\s+java\.lang\.AssertionError:.*')
+    error_message_trace_pattern = re.compile('.*\[TestEventLogger\]\s+at\s+.*')
 
     test_runs = []
     running_tests = []
@@ -41,22 +44,27 @@ class KeepTestingCommand(sublime_plugin.EventListener):
             test_fail = 0
             for k in keys:
                 test_count += 1
-                result = self.test_results[k]
+                result = self.test_results[k][0]
+                error = self.test_results[k][1]
                 if (result == 'PASSED'):
                     test_ok += 1
                     progressbar += '-'
                 elif (result == 'FAILED'):
                     test_fail += 1
                     progressbar += 'X'
-                    error_message = k
+                    error_message = k.split("|")[1]
+                    if (len(error) > 0):
+                        error_message += " - " + error
                 elif (result == 'STARTED'):
                     progressbar += 'o'
                 else:
                     print "Unknown result for " + k + ": " + result
                     progressbar += '?'
-            progressbar += "] " + str(test_ok)  + "/" + str(test_count) + " passed"
+            progressbar += "] "
             if test_fail > 0:
-                progressbar += " - FAIL " + error_message
+                progressbar += " " + error_message
+            else:
+                progressbar += str(test_ok)  + "/" + str(test_count) + " passed"
             sublime.status_message(progressbar)
 
         if self.is_running() or test_fail > 0:
@@ -93,13 +101,31 @@ class KeepTestingCommand(sublime_plugin.EventListener):
         out = ''
         success = False
         failed_tests = None
+        capturing_error_message = False
+        error_message = ""
+        current_key = None
+        last_key = None
         while(True):
             retcode = p.poll()
             line = p.stdout.readline()
             out += line
             m = KeepTestingCommand.test_status_pattern.match(line)
             if m:
-                result[m.group(1) + " : " + m.group(2)] = m.group(3)
+                current_key = m.group(1) + "|" + m.group(2)
+                result[current_key] = [m.group(3),'']
+                error_message = ''
+
+            if (KeepTestingCommand.error_message_start_pattern.match(line)):
+                capturing_error_message = True
+            elif (KeepTestingCommand.error_message_trace_pattern.match(line)):
+                capturing_error_message = False
+                result[current_key] = [result[current_key][0], error_message]
+                # this is where we look for line number in stack trace
+            elif capturing_error_message:
+                m = KeepTestingCommand.test_output_pattern.match(line)
+                if m:
+                    error_message += " " + m.group(1)
+
             if (retcode is not None):
                 break
         self.stopped_tests()
