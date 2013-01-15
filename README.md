@@ -55,6 +55,7 @@ Feel free to fork and dig in to any of these, it's open source, right?
 + Keep results in status bar if failed? (`set_timeout` party)
 + Exception handling to never have to `rm .keepTestingLock`
 + Timeout on test process
++ Handle compilation errors
 
 Known Issues
 ------------

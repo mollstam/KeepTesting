@@ -4,19 +4,33 @@ exe = __import__('exec')
 class KeepTestingCommand(sublime_plugin.EventListener):
     test_status_pattern = re.compile('.*\[TestEventLogger\] ([A-Za-z0-9\._]+) > ([A-Za-z0-9_]+) ([A-Z]+).*')
 
+    test_runs = []
     running_tests = []
     lock_path = None
     project_path = None
     test_results = multiprocessing.Manager().dict()
+    done = False
+    stop = False
 
     def run_tests(self):
+        KeepTestingCommand.test_runs.append(self)
+        self.done = False
         self.project_path = sublime.active_window().folders()[0]
         self.lock_path = self.project_path + "/.keepTestingLock"
         if self.is_running() == False:
             self.start_tests()
             self.check_results()
 
+    def stop_all(self):
+        for t in KeepTestingCommand.test_runs:
+            t.stop = True
+
     def check_results(self):
+        if self.stop:
+            return
+
+        if self.done and self.is_running():
+            return
 
         if (len(self.test_results.keys()) != 0):
             progressbar = "["
@@ -41,7 +55,7 @@ class KeepTestingCommand(sublime_plugin.EventListener):
             progressbar += "] " + str(test_ok)  + "/" + str(test_count) + " passed"
             sublime.status_message(progressbar)
 
-        if self.is_running() is True or (self.is_running() is False and test_fail > 0):
+        if self.is_running() or test_fail > 0:
             sublime.set_timeout(self.check_results, 50)
 
 
@@ -52,6 +66,7 @@ class KeepTestingCommand(sublime_plugin.EventListener):
         if self.is_running():
             #print "stopping tests"
             os.unlink(self.lock_path)
+            self.done = True
 
     def start_tests(self):
         if self.lock_path is None:
@@ -59,9 +74,9 @@ class KeepTestingCommand(sublime_plugin.EventListener):
             return
 #        print "starting tests"
         sublime.status_message("Running tests...")
+        with open (self.lock_path, 'w') as f: f.write('')
         self.test_results = multiprocessing.Manager().dict()
         threading.Thread(target=self.worker, args=(self.test_results,)).start()
-        with open (self.lock_path, 'w') as f: f.write('')
 
     def is_running(self):
         if self.lock_path is None:
@@ -88,13 +103,17 @@ class KeepTestingCommand(sublime_plugin.EventListener):
 
     def on_post_save(self, view):
         if (len(sublime.active_window().folders()) == 0):
+            self.stop_all()
             return
 
         if (os.path.isdir(sublime.active_window().folders()[0] + "/.gradle") == False):
+            self.stop_all()
             return
 
         if '..' in os.path.relpath(view.file_name(), sublime.active_window().folders()[0]):
+            self.stop_all()
             return
 
-        sublime.set_timeout(self.run_tests, 1)
+        cmd = KeepTestingCommand()
+        sublime.set_timeout(cmd.run_tests, 1)
 
