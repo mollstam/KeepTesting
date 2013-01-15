@@ -93,5 +93,8 @@ class KeepTestingCommand(sublime_plugin.EventListener):
         if (os.path.isdir(sublime.active_window().folders()[0] + "/.gradle") == False):
             return
 
+        if '..' in os.path.relpath(view.file_name(), sublime.active_window().folders()[0]):
+            return
+
         sublime.set_timeout(self.run_tests, 1)
 
