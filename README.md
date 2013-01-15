@@ -51,8 +51,6 @@ Todo
 ----
 Feel free to fork and dig in to any of these, it's open source, right?
 + Move this and below list to issue tracker
-+ Only run if enabled on project level
-+ Show progress during testing
 + Show which test(s) fail
 + Keep results in status bar if failed? (`set_timeout` party)
 + Exception handling to never have to `rm .keepTestingLock`
