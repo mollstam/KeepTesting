@@ -87,5 +87,7 @@ class KeepTestingCommand(sublime_plugin.EventListener):
         return
 
     def on_post_save(self, view):
+        if (len(sublime.active_window().folders()) == 0)
+            return
         sublime.set_timeout(self.run_tests, 1)
 
