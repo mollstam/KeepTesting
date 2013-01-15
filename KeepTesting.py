@@ -132,6 +132,10 @@ class KeepTestingCommand(sublime_plugin.EventListener):
         return
 
     def on_post_save(self, view):
+        activated = sublime.load_settings("Preferences.sublime-settings").get("keep_testing", False)
+        if activated is False:
+            return
+
         if (len(sublime.active_window().folders()) == 0):
             self.stop_all()
             return
