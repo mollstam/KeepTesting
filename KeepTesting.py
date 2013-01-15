@@ -41,7 +41,7 @@ class KeepTestingCommand(sublime_plugin.EventListener):
             progressbar += "] " + str(test_ok)  + "/" + str(test_count) + " passed"
             sublime.status_message(progressbar)
 
-        if self.is_running() is True:
+        if self.is_running() is True or (self.is_running() is False and test_fail > 0):
             sublime.set_timeout(self.check_results, 50)
 
 
