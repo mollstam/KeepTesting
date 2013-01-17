@@ -1,4 +1,4 @@
-import sys, sublime, sublime_plugin, time, datetime, os, threading, subprocess, re, multiprocessing
+import sys, sublime, sublime_plugin, time, datetime, os, threading, subprocess, re, multiprocessing, string
 exe = __import__('exec')
 
 class KeepTestingCommand(sublime_plugin.EventListener):
@@ -6,6 +6,7 @@ class KeepTestingCommand(sublime_plugin.EventListener):
     test_status_pattern = re.compile('.*\[TestEventLogger\] ([A-Za-z0-9\._]+) > ([A-Za-z0-9_]+) ([A-Z]+).*')
     error_message_start_pattern = re.compile('.*\[TestEventLogger\]\s+java\.lang\.AssertionError:.*')
     error_message_trace_pattern = re.compile('.*\[TestEventLogger\]\s+at\s+.*')
+    compile_error_pattern = re.compile('.*\[ERROR\]\s+\[system.err\]\s+(.*)')
     line_number_pattern = re.compile('.*(:[0-9]+)\)')
 
     test_runs = []
@@ -36,6 +37,9 @@ class KeepTestingCommand(sublime_plugin.EventListener):
         if self.done and self.is_running():
             return
 
+        test_count = 0
+        test_ok = 0
+        test_fail = 0
         if (len(self.test_results.keys()) != 0):
             progressbar = "["
             error_message = ""
@@ -44,6 +48,8 @@ class KeepTestingCommand(sublime_plugin.EventListener):
             test_ok = 0
             test_fail = 0
             for k in keys:
+                if k == "compile":
+                    continue
                 test_count += 1
                 result = self.test_results[k][0]
                 error = self.test_results[k][1]
@@ -63,7 +69,10 @@ class KeepTestingCommand(sublime_plugin.EventListener):
                     print "Unknown result for " + k + ": " + result
                     progressbar += '?'
             progressbar += "] "
-            if test_fail > 0:
+            if 'compile' in self.test_results:
+                progressbar = "Compile error: " + str(self.test_results['compile'][1])
+                test_fail = 1
+            elif test_fail > 0:
                 progressbar += " " + error_message
             else:
                 progressbar += str(test_ok)  + "/" + str(test_count) + " passed"
@@ -118,13 +127,21 @@ class KeepTestingCommand(sublime_plugin.EventListener):
                 current_key = m.group(1) + "|" + m.group(2)
                 result[current_key] = [m.group(3),'','']
                 error_message = ''
+            m = KeepTestingCommand.compile_error_pattern.match(line)
+            if m:
+                error_message = m.group(1)
 
-            if (KeepTestingCommand.error_message_start_pattern.match(line)):
+            m = KeepTestingCommand.compile_error_pattern.match(line)
+            if m:
+                compile_error = string.replace(m.group(1), self.project_path, '')
+                compile_error = string.replace(compile_error, '/src/main/java/', '')
+                compile_error = string.replace(compile_error, '/', '.')
+                result['compile'] = ['COMPILERERROR',compile_error,'']
+                break
+            elif (KeepTestingCommand.error_message_start_pattern.match(line)):
                 capturing_error_message = True
             elif (KeepTestingCommand.error_message_trace_pattern.match(line)):
                 capturing_error_message = False
-                result[current_key] = [result[current_key][0], error_message, result[current_key][2]]
-                # this is where we look for line number in stack trace
                 if current_test_class in line:
                     m = KeepTestingCommand.line_number_pattern.match(line)
                     if m:
