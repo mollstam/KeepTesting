@@ -127,9 +127,6 @@ class KeepTestingCommand(sublime_plugin.EventListener):
                 current_key = m.group(1) + "|" + m.group(2)
                 result[current_key] = [m.group(3),'','']
                 error_message = ''
-            m = KeepTestingCommand.compile_error_pattern.match(line)
-            if m:
-                error_message = m.group(1)
 
             m = KeepTestingCommand.compile_error_pattern.match(line)
             if m:
@@ -142,11 +139,13 @@ class KeepTestingCommand(sublime_plugin.EventListener):
                 capturing_error_message = True
             elif (KeepTestingCommand.error_message_trace_pattern.match(line)):
                 capturing_error_message = False
+                result[current_key] = [result[current_key][0], error_message, result[current_key][2]]
                 if current_test_class in line:
                     m = KeepTestingCommand.line_number_pattern.match(line)
                     if m:
                         result[current_key] = [result[current_key][0], result[current_key][1], m.group(1)]
             elif capturing_error_message:
+                print line
                 m = KeepTestingCommand.test_output_pattern.match(line)
                 if m:
                     error_message += " " + m.group(1)
