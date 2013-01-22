@@ -108,52 +108,68 @@ class KeepTestingCommand(sublime_plugin.EventListener):
         return os.path.isfile(self.lock_path)
 
     def worker(self, result):
-        p = subprocess.Popen(['/usr/local/bin/gradle', '--daemon', '--debug', 'clean', 'test'], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, cwd=self.project_path)
-        out = ''
-        success = False
-        failed_tests = None
-        capturing_error_message = False
-        error_message = ""
-        current_key = None
-        last_key = None
-        current_test_class = None
-        while(True):
-            retcode = p.poll()
-            line = p.stdout.readline()
-            out += line
-            m = KeepTestingCommand.test_status_pattern.match(line)
-            if m:
-                current_test_class = m.group(1)
-                current_key = m.group(1) + "|" + m.group(2)
-                result[current_key] = [m.group(3),'','']
-                error_message = ''
+        p = None
+        try:
+            p = subprocess.Popen(['/usr/local/bin/gradle', '--daemon', '--debug', 'clean', 'test'], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, cwd=self.project_path)
+            out = ''
+            success = False
+            failed_tests = None
+            capturing_error_message = False
+            error_message = ""
+            current_key = None
+            last_key = None
+            current_test_class = None
+            while(True):
+                if self.stop:
+                    break
 
-            m = KeepTestingCommand.compile_error_pattern.match(line)
-            if m:
-                compile_error = string.replace(m.group(1), self.project_path, '')
-                compile_error = string.replace(compile_error, '/src/main/java/', '')
-                compile_error = string.replace(compile_error, '/', '.')
-                result['compile'] = ['COMPILERERROR',compile_error,'']
-                break
-            elif (KeepTestingCommand.error_message_start_pattern.match(line)):
-                capturing_error_message = True
-            elif (KeepTestingCommand.error_message_trace_pattern.match(line)):
-                capturing_error_message = False
-                result[current_key] = [result[current_key][0], error_message, result[current_key][2]]
-                if current_test_class in line:
-                    m = KeepTestingCommand.line_number_pattern.match(line)
-                    if m:
-                        result[current_key] = [result[current_key][0], result[current_key][1], m.group(1)]
-            elif capturing_error_message:
-                print line
-                m = KeepTestingCommand.test_output_pattern.match(line)
+                retcode = p.poll()
+                line = p.stdout.readline()
+                out += line
+                m = KeepTestingCommand.test_status_pattern.match(line)
                 if m:
-                    error_message += " " + m.group(1)
+                    current_test_class = m.group(1)
+                    current_key = m.group(1) + "|" + m.group(2)
+                    result[current_key] = [m.group(3),'','']
+                    error_message = ''
 
-            if (retcode is not None):
-                break
-        self.stopped_tests()
+                m = KeepTestingCommand.compile_error_pattern.match(line)
+                if m and "Note:" not in m.group(1):
+                    compile_error = string.replace(m.group(1), self.project_path, '')
+                    compile_error = string.replace(compile_error, '/src/main/java/', '')
+                    compile_error = string.replace(compile_error, '/', '.')
+                    result['compile'] = ['COMPILERERROR',compile_error,'']
+                    break
+                elif (KeepTestingCommand.error_message_start_pattern.match(line)):
+                    capturing_error_message = True
+                elif (KeepTestingCommand.error_message_trace_pattern.match(line)):
+                    capturing_error_message = False
+                    result[current_key] = [result[current_key][0], error_message, result[current_key][2]]
+                    if current_test_class in line:
+                        m = KeepTestingCommand.line_number_pattern.match(line)
+                        if m:
+                            result[current_key] = [result[current_key][0], result[current_key][1], m.group(1)]
+                elif capturing_error_message:
+                    print line
+                    m = KeepTestingCommand.test_output_pattern.match(line)
+                    if m:
+                        error_message += " " + m.group(1)
+
+                if (retcode is not None):
+                    break
+            self.stopped_tests()
+        except:
+            print "[KeepTesting] [Error] : " + "Unexpected error, killing process. ", sys.exc_info()[0]
+            self.stop_all()
+
+            if p is not None:
+                p.kill()
+
+            self.stopped_tests()
         return
+
+    def log_debug(self, message):
+        print "[KeepTesting] [Debug] : " + str(message)
 
     def on_post_save(self, view):
         activated = sublime.load_settings("Preferences.sublime-settings").get("keep_testing", False)
@@ -161,17 +177,21 @@ class KeepTestingCommand(sublime_plugin.EventListener):
             return
 
         if (len(sublime.active_window().folders()) == 0):
+            self.log_debug("No folder open")
             self.stop_all()
             return
 
-        if (os.path.isdir(sublime.active_window().folders()[0] + "/.gradle") == False):
+        if (os.path.isfile(sublime.active_window().folders()[0] + "/build.gradle") == False):
+            self.log_debug("Current folder doesn't have build.gradle")
             self.stop_all()
             return
 
         if '..' in os.path.relpath(view.file_name(), sublime.active_window().folders()[0]):
+            self.log_debug("Current file isn't inside current folder")
             self.stop_all()
             return
 
+        self.log_debug("Running tests")
         cmd = KeepTestingCommand()
         sublime.set_timeout(cmd.run_tests, 1)
 
