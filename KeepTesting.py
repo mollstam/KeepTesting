@@ -63,6 +63,8 @@ class KeepTestingCommand(sublime_plugin.EventListener):
                     error_message = k.split("|")[1]
                     if (len(error) > 0):
                         error_message += line_number + " - " + error
+                elif (result == 'SKIPPED'):
+                    progressbar += 'S'
                 elif (result == 'STARTED'):
                     progressbar += 'o'
                 else:
