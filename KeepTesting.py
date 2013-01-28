@@ -40,6 +40,7 @@ class KeepTestingCommand(sublime_plugin.EventListener):
         test_count = 0
         test_ok = 0
         test_fail = 0
+        test_skip = 0
         if (len(self.test_results.keys()) != 0):
             progressbar = "["
             error_message = ""
@@ -65,6 +66,7 @@ class KeepTestingCommand(sublime_plugin.EventListener):
                         error_message += line_number + " - " + error
                 elif (result == 'SKIPPED'):
                     progressbar += 'S'
+                    test_skip += 1
                 elif (result == 'STARTED'):
                     progressbar += 'o'
                 else:
@@ -77,7 +79,9 @@ class KeepTestingCommand(sublime_plugin.EventListener):
             elif test_fail > 0:
                 progressbar += " " + error_message
             else:
-                progressbar += str(test_ok)  + "/" + str(test_count) + " passed"
+                progressbar += str(test_ok)  + "/" + str(test_count - test_skip) + " passed"
+                if (test_skip > 0):
+                    progressbar += " (" + str(test_skip) + " skipped)"
             sublime.status_message(progressbar)
 
         if self.is_running() or test_fail > 0:
